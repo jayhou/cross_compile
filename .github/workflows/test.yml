@@ -10,13 +10,15 @@ on:
     - cron:  '0 * * * *'
 
 jobs:
-  build_and_test:
-    runs-on: ${{ matrix.os }}
+  build_and_test_ubuntu:
+    runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
-          os: [macOS-latest, ubuntu-18.04]
           python-version: [3.5, 3.6, 3.7]
+    container:
+      image: ubuntu:bionic
+      options: -v /var/run/docker.sock:/var/run/docker.sock
     steps:
     - name: Checkout sources
       uses: actions/checkout@v2
@@ -25,17 +27,14 @@ jobs:
         python-version: ${{ matrix.python-version }}
         architecture: x64
     - name: Install dependencies
-      run: |
-        sudo apt update && sudo apt install -y qemu-user-static
-      if: matrix.os == 'ubuntu-18.04'
+      run: apt-get update && apt-get install -y qemu-user-static python-pip python3-pip git
     - name: Install Tox for testing
-      run: pip install tox
+      run: pip3 install tox
     - name: Run tests
       run: tox -e py
     - uses: codecov/codecov-action@v1
       # Prevent being rate limited by only reporting coverage from the Ubuntu
       # build.
-      if: matrix.os == 'ubuntu-18.04'
       with:
         token: ${{ secrets.CODECOV_TOKEN }}
         file: coverage.xml
@@ -52,8 +51,26 @@ jobs:
       # to upload the package in its initial state, before review.
       # The final state of the pull request would then never be uploaded, as
       # we cannot overwrite packages.
-      if: matrix.os == 'ubuntu-18.04' && github.event_name == 'push'
+      if: github.event_name == 'push'
       with:
         username: ${{ secrets.PYPI_USERNAME }}
         password: ${{ secrets.PYPI_PASSWORD }}
         repository-url: https://test.pypi.org/legacy/
+
+  build_and_test_macos:
+    runs-on: macOS-latest
+    strategy:
+      fail-fast: false
+      matrix:
+          python-version: [3.5, 3.6, 3.7]
+    steps:
+    - name: Checkout sources
+      uses: actions/checkout@v2
+    - uses: actions/setup-python@v1
+      with:
+        python-version: ${{ matrix.python-version }}
+        architecture: x64
+    - name: Install Tox for testing
+      run: pip install tox
+    - name: Run tests
+      run: tox -e py
